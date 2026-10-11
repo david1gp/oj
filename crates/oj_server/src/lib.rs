@@ -225,6 +225,19 @@ pub fn is_tanstack_start_app(root: &Path) -> bool {
             .unwrap_or(false)
 }
 
+/// A TanStack Start app on SolidJS (`@tanstack/solid-start`): same file-based
+/// routing layout as the React flavor, but oj's Start pipeline (server-entry,
+/// client-entry, `server-rpc` rewrites) is React-specific, so this is
+/// detected separately and NOT routed into it. The plain dev server still
+/// serves its modules (vite-plugin-solid transforms via the plugin host).
+/// See SOLID.md.
+pub fn is_tanstack_solid_start_app(root: &Path) -> bool {
+    root.join("src/routes").is_dir()
+        && std::fs::read_to_string(root.join("package.json"))
+            .map(|s| s.contains("@tanstack/solid-start"))
+            .unwrap_or(false)
+}
+
 type Defines = Vec<(String, String)>;
 
 /// Deduplicate a define list keeping the LAST occurrence of each key (later
@@ -1278,6 +1291,12 @@ impl DevServer {
         let (listener, port) = bind_dev_listener(built.host, built.port, built.strict_port).await?;
         println!("  {} dev server", oj_brand());
         println!("  root: {}", built.root.display());
+        if is_tanstack_solid_start_app(&built.root) {
+            println!(
+                "  solid-start detected: oj serves transformed modules + HMR glue only; \
+                 the Start SSR HTML shell is not yet supported (see SOLID.md)"
+            );
+        }
         let url = format!("http://localhost:{}/", port);
         println!("  {}", link(&url, &cell(&url)));
         if !built.proxy_prefixes.is_empty() {
