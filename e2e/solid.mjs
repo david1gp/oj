@@ -41,7 +41,7 @@ const appTsx = (label) =>
 fs.writeFileSync(path.join(app, "src", "App.tsx"), appTsx("count"));
 fs.writeFileSync(
   path.join(app, "src", "main.tsx"),
-  `import { render } from "solid-js/web";\nimport Counter from "./App.jsx";\nrender(() => <Counter />, document.getElementById("app"));\n`,
+  `import { render } from "solid-js/web";\nimport Counter from "./App.tsx";\nrender(() => <Counter />, document.getElementById("app"));\n`,
 );
 fs.writeFileSync(
   path.join(app, "vite.config.mjs"),
@@ -82,7 +82,7 @@ async function mode(label, args, port, build, hmr) {
     if (hmr) {
       await page.evaluate(() => (window.__SURVIVE = "yes"));
       fs.writeFileSync(path.join(app, "src", "App.tsx"), appTsx("clicks"));
-      await page.waitForFunction(() => document.getElementById("btn")?.textContent?.startsWith("clicks:"), {
+      await page.waitForFunction(() => document.getElementById("btn")?.textContent?.startsWith("clicks:"), null, {
         timeout: 10000,
       });
       const survived = await page.evaluate(() => window.__SURVIVE);

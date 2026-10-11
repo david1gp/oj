@@ -574,8 +574,8 @@ export const HomePage = _$$component(_REGISTRY, "HomePage", function HomePage(pr
   return _tmpl$.cloneNode(true);
 });
 "#;
-        let out = compile_module(Path::new("HomePage.tsx"), src, &CompileOptions::dev(), None)
-            .unwrap();
+        let out =
+            compile_module(Path::new("HomePage.tsx"), src, &CompileOptions::dev(), None).unwrap();
         assert!(!out.has_refresh_registrations(), "{}", out.code);
         assert!(!out.code.contains("$RefreshReg$"), "{}", out.code);
         assert!(!out.code.contains("jsx-dev-runtime"), "{}", out.code);

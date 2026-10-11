@@ -46,6 +46,23 @@ This branch adds, without changing any React behavior:
 - A `oj dev` startup note when a Solid Start app is detected, and a hinted
   `oj build` error, so the 404 is not a mystery.
 - The compiler regression test above.
+- **`vite:alias` fallback in the plugin `resolveId` chain
+  (`plugin-host.mjs` `resolveIdFull`, test
+  `e2e/unit/resolve-alias-fallback.test.mjs`):** when no `resolveId` hook
+  claims an id, the merged config's `resolve.alias` (string finds and
+  RegExps, including entries from plugin `config` hooks) rewrites it.
+  Without this, `vite-plugin-solid`'s `/^solid-refresh$/` →
+  `/@solid-refresh` alias never applied and every Solid component 500'd
+  (`Failed to resolve import "solid-refresh"`). Plugin claims still win
+  over aliases, as in Vite.
+- **Dep-aware imports in plugin-loaded source (`plugin_routes.rs`
+  `dep_pre_resolver`):** `serve_plugin_id` / `serve_plugin_load_fallback`
+  now resolve bare imports through the optimized dep map like app modules
+  do (previously `|_| None`). Without this, the `solid-refresh` runtime
+  imported `solid-js` from raw `/node_modules/.../dev.js` while the app
+  used the prebundled `/@oj-deps/solid-js.mjs` — two Solid instances
+  (the "multiple instances" warning) and silently dead HMR registries:
+  updates applied (`hot updated`) but never re-rendered.
 
 ## How to verify (no browser needed)
 
@@ -59,7 +76,9 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<mw-port>/  # plugin m
 
 Or the browser e2e for plain Solid apps: `node e2e/solid.mjs`
 (same shape as `e2e/svelte.mjs`: render, click-counter reactivity, HMR
-hot-swap without reload).
+hot-swap without reload, plus a production preview render).
+**Status: passes** (`SOLID E2E PASSED`: `[dev] solid OK (+hot swap,
+no reload)`, `[prod] solid OK`).
 
 ## Roadmap to full Solid Start support
 
