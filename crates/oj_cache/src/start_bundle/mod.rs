@@ -201,10 +201,24 @@ impl StartBundleStore {
     /// import.meta.env, so `oj dev --mode staging` must not restore a bundle
     /// built for `development` (or the other way round).
     pub fn for_mode(root: &Path, tool_version: &str, verify: VerifyMode, mode: &str) -> Self {
+        Self::for_mode_and_framework(root, tool_version, verify, mode, "react")
+    }
+
+    /// Like [`StartBundleStore::for_mode`], additionally keyed by the Start
+    /// flavor: a React client bundle and a Solid one over the same sources
+    /// differ (entry, JSX transform, rpc imports) and must never restore
+    /// for each other.
+    pub fn for_mode_and_framework(
+        root: &Path,
+        tool_version: &str,
+        verify: VerifyMode,
+        mode: &str,
+        framework: &str,
+    ) -> Self {
         Self {
             dir: crate::cache_root(root).join("start-bundle"),
             salt: format!(
-                "{tool_version}:{START_BUNDLE_FORMAT}:start-bundle:{mode}:{}",
+                "{tool_version}:{START_BUNDLE_FORMAT}:start-bundle:{mode}:{framework}:{}",
                 epoch(root, mode, vendored_rolldown().epoch_input().as_deref())
             ),
             verify,

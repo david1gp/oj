@@ -32,6 +32,7 @@ use oj_js::HostResolved;
 use oj_js::JsEngine;
 use oj_js::ModuleHost;
 use oj_server::SsrBridge;
+use oj_server::StartFramework;
 use oj_server::StartResolution;
 
 use crate::ssr_dev::normalize_path;
@@ -169,7 +170,7 @@ fn base64url(bytes: &[u8]) -> String {
 /// const doIt = factory.handler(...)`) to the WRONG variable. That split
 /// shape is left untouched: TanStack's own compiler resolves it by following
 /// variable bindings in the AST, which a textual rewrite cannot do safely.
-pub(crate) fn rewrite_server_fns(code: &str, rel: &str) -> String {
+pub(crate) fn rewrite_server_fns(code: &str, rel: &str, framework: StartFramework) -> String {
     if !code.contains("createServerFn") {
         return code.to_string();
     }
@@ -202,8 +203,10 @@ pub(crate) fn rewrite_server_fns(code: &str, rel: &str) -> String {
         return code.to_string();
     }
     edits.sort_by_key(|(at, _)| *at);
-    let mut out =
-        String::from("import { createServerRpc } from \"@tanstack/react-start/server-rpc\"; ");
+    let mut out = String::from(format!(
+        "import {{ createServerRpc }} from \"{}/server-rpc\"; ",
+        framework.start_package()
+    ));
     let mut last = 0;
     for (at, text) in edits {
         out.push_str(&code[last..at]);
@@ -650,7 +653,11 @@ fn split_intent(spec: &str) -> (String, Option<&'static str>, bool) {
 /// resolved targets under the app or the start cache dir. start-server-core
 /// imports these by bare specifier and expects the bundler to answer; one the
 /// host does not map fails every document request.
-fn framework_aliases(root: &Path, cache: &Path) -> Vec<(String, PathBuf)> {
+fn framework_aliases(
+    root: &Path,
+    cache: &Path,
+    framework: StartFramework,
+) -> Vec<(String, PathBuf)> {
     vec![
         ("#tanstack-router-entry".into(), root.join("src/router")),
         ("#tanstack-start-entry".into(), cache.join("start-entry.ts")),
@@ -682,8 +689,8 @@ fn framework_aliases(root: &Path, cache: &Path) -> Vec<(String, PathBuf)> {
         // Start's default server entry is oj's runner entry: an app
         // `server.entry` that wraps it composes the same way as in Vite.
         (
-            "@tanstack/react-start/server-entry".into(),
-            cache.join("server-entry.tsx"),
+            format!("{}/server-entry", framework.start_package()),
+            cache.join(framework.server_entry_file()),
         ),
     ]
 }
@@ -696,6 +703,7 @@ pub struct StartHost {
     /// The Start framework-seam aliases (the loader's ALIASES map): resolved
     /// targets under the app or the start cache dir.
     aliases: Vec<(String, PathBuf)>,
+    framework: StartFramework,
     no_external: NoExternal,
     graph: VersionGraph,
     /// buildStart for the ssr plugin container ran (once per session), so
@@ -713,13 +721,15 @@ impl StartHost {
         bridge: SsrBridge,
         no_external: oj_config::SsrExternals,
         public_dir: Option<PathBuf>,
+        framework: StartFramework,
     ) -> Arc<StartHost> {
-        let aliases = framework_aliases(&root, cache);
+        let aliases = framework_aliases(&root, cache, framework);
         Arc::new(StartHost {
             bridge,
             root,
             public_dir,
             aliases,
+            framework,
             no_external: NoExternal::new(no_external),
             graph: VersionGraph::default(),
             plugins_started: tokio::sync::OnceCell::new(),
@@ -1108,7 +1118,7 @@ impl StartHost {
                 .strip_prefix(&format!("{}/", self.root.to_string_lossy()))
                 .unwrap_or(&clean)
                 .to_string();
-            rewrite_server_fns(&raw, &rel)
+            rewrite_server_fns(&raw, &rel, self.framework)
         } else {
             raw
         };
@@ -1274,10 +1284,18 @@ impl StartEngine {
         no_external: oj_config::SsrExternals,
         public_dir: Option<PathBuf>,
         init_env: Vec<(String, String)>,
+        framework: StartFramework,
     ) -> anyhow::Result<StartEngine> {
         let bootstrap = cache.join("start-bootstrap.mjs");
         std::fs::write(&bootstrap, START_BOOTSTRAP_JS)?;
-        let host = StartHost::new(root.clone(), cache, bridge, no_external, public_dir);
+        let host = StartHost::new(
+            root.clone(),
+            cache,
+            bridge,
+            no_external,
+            public_dir,
+            framework,
+        );
         let engine = spawn_engine(&root, &host)?;
         Ok(StartEngine {
             host,
@@ -1512,7 +1530,7 @@ mod tests {
     #[test]
     fn server_fn_rewrite_matches_the_node_loader() {
         let code = "import { createServerFn } from \"@tanstack/react-start\";\nexport const getGreeting = createServerFn({ method: \"GET\" }).handler(async () => \"hi\");\n";
-        let out = rewrite_server_fns(code, "src/server/data.ts");
+        let out = rewrite_server_fns(code, "src/server/data.ts", StartFramework::React);
         assert!(out
             .starts_with("import { createServerRpc } from \"@tanstack/react-start/server-rpc\"; "));
         let id = base64url(b"src/server/data.ts#getGreeting");
@@ -1528,7 +1546,24 @@ mod tests {
 
         // Untouched code passes through byte-identical.
         let plain = "export const x = 1;\n";
-        assert_eq!(rewrite_server_fns(plain, "src/x.ts"), plain);
+        assert_eq!(
+            rewrite_server_fns(plain, "src/x.ts", StartFramework::React),
+            plain
+        );
+    }
+
+    #[test]
+    fn server_fn_rewrite_uses_the_solid_start_package_for_solid() {
+        let code = "import { createServerFn } from \"@tanstack/solid-start\";\nexport const getGreeting = createServerFn({ method: \"GET\" }).handler(async () => \"hi\");\n";
+        let out = rewrite_server_fns(code, "src/server/data.ts", StartFramework::Solid);
+        assert!(
+            out.starts_with(
+                "import { createServerRpc } from \"@tanstack/solid-start/server-rpc\"; "
+            ),
+            "{out}"
+        );
+        assert!(out.contains("getGreeting_createServerFn_handler"), "{out}");
+        assert_eq!(code.lines().count(), out.lines().count());
     }
 
     // The mis-rewrite the lazy regex allowed: a factory assigned in one
@@ -1539,16 +1574,22 @@ mod tests {
     #[test]
     fn split_statement_factories_are_left_untouched() {
         let split = "import { createServerFn } from \"@tanstack/react-start\";\nconst factory = createServerFn({ method: \"POST\" });\nexport const doIt = factory.handler(async () => 1);\n";
-        assert_eq!(rewrite_server_fns(split, "src/split.ts"), split);
+        assert_eq!(
+            rewrite_server_fns(split, "src/split.ts", StartFramework::React),
+            split
+        );
 
         // Same, single line with a `;` between the statements.
         let inline = "const factory = createServerFn({ method: \"POST\" }); export const doIt = factory.handler(async () => 1);\n";
-        assert_eq!(rewrite_server_fns(inline, "src/split.ts"), inline);
+        assert_eq!(
+            rewrite_server_fns(inline, "src/split.ts", StartFramework::React),
+            inline
+        );
 
         // A factory NEXT TO a chained server fn: the factory stays untouched,
         // the chained one still rewrites under its own name.
         let mixed = "const factory = createServerFn({ method: \"POST\" });\nexport const real = createServerFn({ method: \"GET\" }).handler(async () => 2);\nexport const viaFactory = factory.handler(async () => 3);\n";
-        let out = rewrite_server_fns(mixed, "src/mixed.ts");
+        let out = rewrite_server_fns(mixed, "src/mixed.ts", StartFramework::React);
         assert!(out.contains("export const real_createServerFn_handler = createServerRpc("));
         assert!(out.contains(".handler(real_createServerFn_handler, async () => 2)"));
         assert!(!out.contains("factory_createServerFn_handler"), "{out}");
@@ -1562,7 +1603,7 @@ mod tests {
     #[test]
     fn adjacent_server_fns_rewrite_independently() {
         let code = "export const a = createServerFn({ method: \"GET\" }).handler(async () => 1);\nexport const b = createServerFn({ method: \"POST\" }).handler(async () => 2);\n";
-        let out = rewrite_server_fns(code, "src/two.ts");
+        let out = rewrite_server_fns(code, "src/two.ts", StartFramework::React);
         for name in ["a", "b"] {
             let id = base64url(format!("src/two.ts#{name}").as_bytes());
             assert!(
@@ -1592,7 +1633,7 @@ mod tests {
   })
   .handler(async ({ data }) => data);
 "#;
-        let out = rewrite_server_fns(code, "src/user.ts");
+        let out = rewrite_server_fns(code, "src/user.ts", StartFramework::React);
         assert!(
             out.contains("export const getUser_createServerFn_handler = createServerRpc("),
             "{out}"
@@ -1609,7 +1650,10 @@ mod tests {
     #[test]
     fn asi_split_factories_are_left_untouched() {
         let code = "const factory = createServerFn({ method: \"POST\" })\nexport const doIt = factory.handler(async () => 1)\n";
-        assert_eq!(rewrite_server_fns(code, "src/asi.ts"), code);
+        assert_eq!(
+            rewrite_server_fns(code, "src/asi.ts", StartFramework::React),
+            code
+        );
     }
 
     #[test]
@@ -1799,7 +1843,7 @@ mod tests {
     fn the_start_host_maps_every_framework_virtual_module() {
         let root = Path::new("/app");
         let cache = Path::new("/app/.oj-cache/v1/start");
-        let aliases = framework_aliases(root, cache);
+        let aliases = framework_aliases(root, cache, StartFramework::React);
         for spec in [
             "tanstack-start-manifest:v",
             "tanstack-start-injected-head-scripts:v",
@@ -1816,6 +1860,32 @@ mod tests {
                 "the start host has no alias for {spec}"
             );
         }
+    }
+
+    #[test]
+    fn the_start_host_aliases_the_solid_server_entry_for_solid() {
+        let root = Path::new("/app");
+        let cache = Path::new("/app/.oj-cache/v1/start");
+        let aliases = framework_aliases(root, cache, StartFramework::Solid);
+        assert!(
+            aliases
+                .iter()
+                .any(|(find, _)| find == "@tanstack/solid-start/server-entry"),
+            "no solid server-entry alias"
+        );
+        assert!(
+            !aliases
+                .iter()
+                .any(|(find, _)| find == "@tanstack/react-start/server-entry"),
+            "the react entry must not leak into solid apps"
+        );
+        assert_eq!(
+            aliases
+                .iter()
+                .find(|(find, _)| find == "@tanstack/solid-start/server-entry")
+                .map(|(_, target)| target.as_path()),
+            Some(cache.join("server-entry-solid.tsx").as_path())
+        );
     }
 
     // The ScriptEngine's process.env shadow: a script's env writes — the

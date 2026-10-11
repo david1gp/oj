@@ -1,6 +1,22 @@
 # SolidJS support (fork: david1gp/oj, branch `solid-support`)
 
-Status: **dev module pipeline works via the Vite plugin host; Start SSR is not yet supported.**
+Status: **plain Vite+Solid fully works; TanStack Solid Start dev boots with
+SSR shell + client hydration; Solid Start production build works end to end.**
+
+## What works
+
+- Plain Vite + Solid apps: `oj dev` serves with `solid-refresh` HMR
+  (hot-swap, no reload) and `oj build` + preview render. Proven by
+  `e2e/solid.mjs` (`SOLID E2E PASSED`).
+- TanStack Solid Start dev (`~/personal/homepage`): `oj dev` routes into the
+  Start pipeline, generates the route tree (`target: "solid"`), bundles the
+  Solid client entry, and serves SSR HTML shell + route head + client
+  hydration with zero errors. Edit → rebuild → reload works.
+- TanStack Solid Start production: `oj build` emits `server.mjs` (+ client
+  assets) and the built server renders the full page correctly (titles in
+  Vite order, content, hydration, no errors).
+- React behavior unchanged: `e2e/start.mjs` (dev + prod) and `e2e/svelte.mjs`
+  pass; Rust + JS suites green.
 
 ## What already works (verified against `~/personal/homepage`, a TanStack Solid Start app)
 
@@ -24,24 +40,49 @@ So for **plain Vite + Solid apps** (with an `index.html`), `oj dev` should
 already serve and hot-update: the solid plugin owns the JSX transform, oj owns
 serving/HMR transport, and the two compose through the normal plugin hooks.
 
-## What does NOT work yet
+## Known gap: dev SSR body
 
-- `GET /` on a Start app 404s (`oj: no such file: /index.html`). oj's plain
-  dev server needs an `index.html`; the TanStack `dev-server` plugin
-  middleware answers 404 inside oj's shim (it needs more of Vite's
-  Environment API than the shim provides).
-- `oj build` on a Start app fails the same way (`no index.html`), and even
-  past that, `oj build` / `start_build` / `start_host` hardcode
-  `@tanstack/react-start` (server-entry, server-rpc, client-entry,
-  `assets/start/*`). A Solid Start build needs parallel
-  `@tanstack/solid-start` entries plus `target: "solid"` router codegen.
-- `is_tanstack_start_app` (`crates/oj_server/src/lib.rs`) only matches
-  `@tanstack/react-start`, deliberately: routing a Solid Start app into the
-  React Start pipeline would fail worse than the current 404. Use
-  `is_tanstack_solid_start_app` (same file) to detect the Solid flavor.
+In `oj dev`, the SSR document has the full head (meta, route head, JSON-LD)
+but an empty body; the client renders all content on hydration (no errors,
+page interactive). Production SSR renders the full body. Suspected area:
+the dev runner path (embedded engine + streaming SSR), not resolution
+(all `#src` and bare imports resolve uniformly to single server builds) or
+transform (solid SSR output verified) or the route tree (byte-identical to
+Vite's). Debugging record: route `head` runs, route `component` never
+runs, throwing components surface as clean empty 200s (error swallowing
+worth fixing regardless), React Start renders fully under the same runner.
+
+## Roadmap (remaining)
+
+1. **Dev SSR body** (above): route components never execute in the dev
+   runner although matching/head succeed. Prime suspect is the embedded
+   engine's streaming SSR behavior (production Node renders the same code
+   fully); needs engine-level observability (runner console forwarding +
+   SSR error surfacing).
+2. **SSR error surfacing**: render throws become clean empty 200s. Surface
+   them (500 + message) the way Vite does.
+3. **Resolve**: confirm the `"solid"` export condition reaches oj's native
+   resolver via the merged vite config (`merge_resolve_block` in
+   `crates/oj_server/src/plugins/extract.rs` adopts `resolve.conditions`
+   from plugin `config` hooks, which is how `vite-plugin-solid` sets it);
+   add a test once a dep requiring it is identified.
 
 This branch adds, without changing any React behavior:
 
+- `StartFramework` (`crates/oj_server/src/lib.rs`): `start_framework()`
+  detection, `start_package()` / `router_target()` / entry filenames;
+  `main.rs` dispatches dev + build on it; `start_dev`/`start_build` keep
+  React wrappers (`*_with_framework` do the work).
+- Framework-threaded Start pipeline: `framework_aliases`,
+  `rewrite_server_fns`, `StartHost::new`, `StartEngine::new`,
+  `script_env`/`start_script_env` (`OJ_START_PKG`, `OJ_ROUTER_TARGET`,
+  `OJ_CLIENT_ENTRY`, `OJ_SERVER_ENTRY_FILE`), per-framework codegen and
+  bundle cache keys (`route-tree-solid`, framework-salted bundle store).
+- `assets/start/`: `client-entry-solid.tsx`, `server-entry-solid.tsx`,
+  `start-pkg.mjs` + `solid-transform.mjs` (babel-preset-solid for bundles:
+  dom/ssr + hydratable, rolldown JSX preserve, `solid`-first conditions);
+  `build.mjs`, `bundle-client.mjs`, `cf-build.mjs`, `generate.mjs`
+  (`target`, footer, fallbacks), `vite-plugin-bridge.mjs` read them.
 - `is_tanstack_solid_start_app()` + tests (`adapter_tests.rs`).
 - A `oj dev` startup note when a Solid Start app is detected, and a hinted
   `oj build` error, so the 404 is not a mystery.
@@ -64,37 +105,30 @@ This branch adds, without changing any React behavior:
   (the "multiple instances" warning) and silently dead HMR registries:
   updates applied (`hot updated`) but never re-rendered.
 
-## How to verify (no browser needed)
+## How to verify
 
 ```sh
 cargo build -p oj
+# plain Solid app e2e (render, reactivity, HMR hot-swap, prod preview):
+node e2e/solid.mjs
+# Solid Start dev on the homepage:
 (cd ~/personal/homepage && ../oj/target/debug/oj dev --port 5199 . &)
-curl -s http://localhost:5199/src/client.tsx | grep -c RefreshReg   # expect 0
-curl -s http://localhost:5199/src/client.tsx | grep -o '_\$createComponent' | head -1
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<mw-port>/  # plugin mw: 404
+curl -s http://localhost:5199/ | head -c 300   # SSR shell + head
+# Solid Start production build:
+(cd ~/personal/homepage && ../oj/target/debug/oj build . --out /tmp/oj-solid-dist)
+(cd /tmp/oj-solid-dist && node server.mjs)     # serves fully-rendered page
 ```
 
-Or the browser e2e for plain Solid apps: `node e2e/solid.mjs`
-(same shape as `e2e/svelte.mjs`: render, click-counter reactivity, HMR
-hot-swap without reload, plus a production preview render).
-**Status: passes** (`SOLID E2E PASSED`: `[dev] solid OK (+hot swap,
-no reload)`, `[prod] solid OK`).
+## Roadmap (remaining)
 
-## Roadmap to full Solid Start support
-
-1. **Dev SSR shell**: implement enough of Vite's Environment API in the
-   plugin-middleware shim (`plugin-host.mjs`, `plugin_mw.rs`) for
-   `tanstack-start-core:dev-server` to handle `/`, or add a native
-   Solid Start dev path mirroring `crates/oj/src/start_dev.rs` with
-   `@tanstack/solid-start/server-entry` + a `client-entry-solid.tsx`
-   (`solid-js/web` `hydrate` + `@tanstack/solid-start/client`).
-2. **Framework aliases**: parameterize `framework_aliases`
-   (`crates/oj/src/start_host.rs:653`) and `rewrite_server_fns` (`:206`)
-   on the Start flavor.
-3. **Build**: `assets/start/*` Solid variants (`target: "solid"` in
-   `generate.mjs`, solid `client-entry`/`server-entry`), `start_build`
-   dispatch in `main.rs:618`.
-4. **Resolve**: confirm the `"solid"` export condition reaches oj's native
+1. **Dev SSR body** (above): route components never execute in the dev
+   runner although matching/head succeed. Prime suspect is the embedded
+   engine's streaming SSR behavior (production Node renders the same code
+   fully); needs engine-level observability (runner console forwarding +
+   SSR error surfacing).
+2. **SSR error surfacing**: render throws become clean empty 200s. Surface
+   them (500 + message) the way Vite does.
+3. **Resolve**: confirm the `"solid"` export condition reaches oj's native
    resolver via the merged vite config (`merge_resolve_block` in
    `crates/oj_server/src/plugins/extract.rs` adopts `resolve.conditions`
    from plugin `config` hooks, which is how `vite-plugin-solid` sets it);

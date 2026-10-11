@@ -125,6 +125,11 @@ const START_ASSETS: &[(&str, &str)] = &[
     ),
     ("fn-stubs.mjs", include_str!("assets/start/fn-stubs.mjs")),
     (
+        "solid-transform.mjs",
+        include_str!("assets/start/solid-transform.mjs"),
+    ),
+    ("start-pkg.mjs", include_str!("assets/start/start-pkg.mjs")),
+    (
         "bundle-client.mjs",
         include_str!("assets/start/bundle-client.mjs"),
     ),
@@ -138,8 +143,16 @@ const START_ASSETS: &[(&str, &str)] = &[
         include_str!("assets/start/server-entry.tsx"),
     ),
     (
+        "server-entry-solid.tsx",
+        include_str!("assets/start/server-entry-solid.tsx"),
+    ),
+    (
         "client-entry.tsx",
         include_str!("assets/start/client-entry.tsx"),
+    ),
+    (
+        "client-entry-solid.tsx",
+        include_str!("assets/start/client-entry-solid.tsx"),
     ),
     (
         "start-entry.ts",
@@ -232,10 +245,71 @@ pub fn is_tanstack_start_app(root: &Path) -> bool {
 /// serves its modules (vite-plugin-solid transforms via the plugin host).
 /// See SOLID.md.
 pub fn is_tanstack_solid_start_app(root: &Path) -> bool {
-    root.join("src/routes").is_dir()
-        && std::fs::read_to_string(root.join("package.json"))
-            .map(|s| s.contains("@tanstack/solid-start"))
-            .unwrap_or(false)
+    start_framework(root) == Some(StartFramework::Solid)
+}
+
+/// Which TanStack Start flavor an app is, if any: `src/routes` plus the
+/// framework's Start package in `package.json`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartFramework {
+    React,
+    Solid,
+}
+
+impl StartFramework {
+    /// `@tanstack/react-start` / `@tanstack/solid-start`: the package whose
+    /// `server-entry`, `server`, `server-rpc`, `client-rpc` and `client`
+    /// subpaths the Start pipeline aliases and rewrites against.
+    pub fn start_package(&self) -> &'static str {
+        match self {
+            StartFramework::React => "@tanstack/react-start",
+            StartFramework::Solid => "@tanstack/solid-start",
+        }
+    }
+
+    /// The `@tanstack/router-generator` `target` for route-tree codegen.
+    pub fn router_target(&self) -> &'static str {
+        match self {
+            StartFramework::React => "react",
+            StartFramework::Solid => "solid",
+        }
+    }
+
+    /// Env var value passed to the `assets/start/*` scripts so the
+    /// package-name strings they embed follow the app's flavor.
+    pub fn env_value(&self) -> &'static str {
+        self.start_package()
+    }
+
+    /// The framework's runner server entry written by `write_start_assets`.
+    pub fn server_entry_file(&self) -> &'static str {
+        match self {
+            StartFramework::React => "server-entry.tsx",
+            StartFramework::Solid => "server-entry-solid.tsx",
+        }
+    }
+
+    /// The framework's client entry bundled by `bundle-client.mjs`.
+    pub fn client_entry_file(&self) -> &'static str {
+        match self {
+            StartFramework::React => "client-entry.tsx",
+            StartFramework::Solid => "client-entry-solid.tsx",
+        }
+    }
+}
+
+pub fn start_framework(root: &Path) -> Option<StartFramework> {
+    if !root.join("src/routes").is_dir() {
+        return None;
+    }
+    let pkg = std::fs::read_to_string(root.join("package.json")).ok()?;
+    if pkg.contains("@tanstack/solid-start") {
+        Some(StartFramework::Solid)
+    } else if pkg.contains("@tanstack/react-start") {
+        Some(StartFramework::React)
+    } else {
+        None
+    }
 }
 
 type Defines = Vec<(String, String)>;

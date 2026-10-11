@@ -1082,7 +1082,7 @@ export async function loadPluginContainer(app, opts = {}) {
   if (!configFile) return null;
   let vite;
   try {
-    vite = await importPkg(app, "vite", ["@tanstack/react-start"]);
+    vite = await importPkg(app, "vite", ["@tanstack/react-start", "@tanstack/solid-start"]);
   } catch {
     return null;
   }

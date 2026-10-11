@@ -18,6 +18,7 @@ use tokio::sync::broadcast;
 
 use crate::start_chunks::{respond, Chunk};
 use crate::start_host::{ScriptEngine, StartEngine, StartRequest, StartResponse};
+use oj_server::StartFramework;
 
 struct StartState {
     /// The scripts' env (see `script_env`), resolved once at boot for the
@@ -80,6 +81,9 @@ struct StartState {
     /// the generic pipeline serves (a dev worker script fetched by URL) are
     /// in no other graph the reload decision consults.
     ssr: oj_server::SsrBridge,
+    /// The TanStack Start flavor: watch-reload codegen (route tree) runs
+    /// with the same target the boot codegen used.
+    framework: StartFramework,
 }
 
 impl StartState {
@@ -151,6 +155,17 @@ pub async fn start_dev(
     config: Option<PathBuf>,
     mode: Option<String>,
 ) -> anyhow::Result<()> {
+    start_dev_with_framework(root, port, host, config, mode, StartFramework::React).await
+}
+
+pub async fn start_dev_with_framework(
+    root: PathBuf,
+    port: Option<u16>,
+    host: Option<String>,
+    config: Option<PathBuf>,
+    mode: Option<String>,
+    framework: StartFramework,
+) -> anyhow::Result<()> {
     let root = root
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("app root not found: {}: {e}", root.display()))?;
@@ -203,11 +218,18 @@ pub async fn start_dev(
     // them concurrently would let the resolver scan half-written files and
     // persist a cache key over content that was still moving.
     // The scripts' env, resolved once and shared by boot and every rebundle.
-    let script_vars: Arc<[(String, String)]> =
-        script_env(oj_env::get(), &root, config_file.as_deref(), "serve", &mode)?.into();
+    let script_vars: Arc<[(String, String)]> = script_env(
+        oj_env::get(),
+        &root,
+        config_file.as_deref(),
+        "serve",
+        &mode,
+        framework,
+    )?
+    .into();
     let route_tree = {
         let (root, cache, env) = (root.clone(), cache.clone(), Arc::clone(&script_vars));
-        tokio::task::spawn_blocking(move || generate_route_tree(&root, &cache, &env))
+        tokio::task::spawn_blocking(move || generate_route_tree(&root, &cache, &env, framework))
     };
     route_tree.await??;
     oj_server::boot_phase("route tree ready");
@@ -224,7 +246,9 @@ pub async fn start_dev(
             Arc::clone(&script_vars),
             mode.clone(),
         );
-        tokio::task::spawn_blocking(move || bundle_client_entry_cached(&root, &cache, &env, &mode))
+        tokio::task::spawn_blocking(move || {
+            bundle_client_entry_cached(&root, &cache, &env, &mode, framework)
+        })
     };
     let (reload_tx, _) = broadcast::channel::<()>(16);
     let (bundle_res, built_res) = tokio::join!(bundle, built_task);
@@ -253,7 +277,7 @@ pub async fn start_dev(
             [client, ssr].concat()
         };
         let entry = configured_start_server_entry(&config, &root)
-            .unwrap_or_else(|| cache.join("server-entry.tsx"));
+            .unwrap_or_else(|| cache.join(framework.server_entry_file()));
         let init_env = script_vars.to_vec();
         Arc::new(StartEngine::new(
             root.clone(),
@@ -263,6 +287,7 @@ pub async fn start_dev(
             oj_config::ssr_externals(&config),
             oj_config::public_dir(&config, &root),
             init_env,
+            framework,
         )?)
     };
     let loopback_port = spawn_engine_loopback(Arc::clone(&engine)).await?;
@@ -412,6 +437,7 @@ pub async fn start_dev(
         // The boot bundle succeeded (start_dev aborts otherwise).
         bundle_ok: std::sync::atomic::AtomicBool::new(true),
         ssr: built.ssr.clone(),
+        framework,
     });
 
     // The activation handler: when the plugin middleware comes up after boot,
@@ -456,7 +482,7 @@ pub async fn start_dev(
     {
         let (root, mode) = (root.clone(), mode.clone());
         tokio::task::spawn_blocking(move || {
-            start_bundle_store(&root, &mode)
+            start_bundle_store(&root, &mode, framework)
                 .prune(oj_cache::start_bundle::DEFAULT_PRUNE_BUDGET_BYTES);
         });
     }
@@ -958,13 +984,14 @@ async fn rebundle_worker(
         let client = {
             let (r, c, m) = (root.clone(), cache.clone(), state.mode.clone());
             let env = Arc::clone(&state.script_env);
+            let framework = state.framework;
             let routes_prev = prev_routes.clone();
             let changed: Vec<PathBuf> = paths.clone();
             tokio::task::spawn_blocking(move || {
                 let routes_now = list_route_files(&r);
                 let routes_changed = routes_now != routes_prev;
                 if routes_changed {
-                    let _ = generate_route_tree(&r, &c, &env);
+                    let _ = generate_route_tree(&r, &c, &env, framework);
                 }
                 let server_fn_changed = changed.iter().any(|p| {
                     let is_ts = p.extension().is_some_and(|e| e == "ts" || e == "tsx");
@@ -982,7 +1009,7 @@ async fn rebundle_worker(
                 let pinned = if !bundling || bundle_client_entry(&r, &c, &env).is_err() {
                     None
                 } else {
-                    match start_bundle_store(&r, &m).persist(&c) {
+                    match start_bundle_store(&r, &m, framework).persist(&c) {
                         Some((_, pinned)) => Some(pinned),
                         None => oj_cache::start_bundle::PinnedBundle::from_build_dir(&c),
                     }
@@ -1328,9 +1355,25 @@ fn start_script_env(
     config_file: Option<&Path>,
     command: &str,
     mode: &str,
+    framework: StartFramework,
 ) -> anyhow::Result<Vec<(String, String)>> {
     let env = oj_env::get();
-    start_script_vars(env, &script_inputs(env, root, config_file, command, mode)?)
+    let mut vars = start_script_vars(env, &script_inputs(env, root, config_file, command, mode)?)?;
+    // Build-env parity with `script_env`: the production build scripts need
+    // the same flavor markers.
+    vars.push((
+        "OJ_START_PKG".to_string(),
+        framework.env_value().to_string(),
+    ));
+    vars.push((
+        "OJ_ROUTER_TARGET".to_string(),
+        framework.router_target().to_string(),
+    ));
+    vars.push((
+        "OJ_CLIENT_ENTRY".to_string(),
+        framework.client_entry_file().to_string(),
+    ));
+    Ok(vars)
 }
 
 /// The app's own TanStack Start server entry (`tanstackStart({ server: { entry } })`),
@@ -1367,6 +1410,16 @@ pub async fn start_build(
     mode: &str,
     out: Option<PathBuf>,
 ) -> anyhow::Result<()> {
+    start_build_with_framework(root, config_file, mode, out, StartFramework::React).await
+}
+
+pub async fn start_build_with_framework(
+    root: PathBuf,
+    config_file: Option<PathBuf>,
+    mode: &str,
+    out: Option<PathBuf>,
+    framework: StartFramework,
+) -> anyhow::Result<()> {
     let root = root
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("app root not found: {}: {e}", root.display()))?;
@@ -1381,10 +1434,11 @@ pub async fn start_build(
             config_file.as_deref(),
             "serve",
             "development",
+            framework,
         )?;
         let (r, c) = (root.clone(), cache.clone());
         tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-            generate_route_tree(&r, &c, &gen_env)?;
+            generate_route_tree(&r, &c, &gen_env, framework)?;
             generate_server_fn_resolver(&r, &c, &gen_env)
         })
         .await??;
@@ -1469,12 +1523,29 @@ pub async fn start_build(
             "OJ_MINIFY".to_string(),
             if minify { "true" } else { "false" }.to_string(),
         ),
+        (
+            "OJ_START_PKG".to_string(),
+            framework.env_value().to_string(),
+        ),
+        (
+            "OJ_ROUTER_TARGET".to_string(),
+            framework.router_target().to_string(),
+        ),
+        (
+            "OJ_CLIENT_ENTRY".to_string(),
+            framework.client_entry_file().to_string(),
+        ),
+        (
+            "OJ_SERVER_ENTRY_FILE".to_string(),
+            framework.server_entry_file().to_string(),
+        ),
     ];
     env.extend(start_script_env(
         &root,
         config_file.as_deref(),
         "build",
         mode,
+        framework,
     )?);
     // The production build runs on the embedded engine (rolldown's napi
     // binding and the app's plugins load byonm, as they did under node).
@@ -1529,8 +1600,15 @@ fn generate_route_tree(
     root: &Path,
     cache: &Path,
     script_env: &[(String, String)],
+    framework: StartFramework,
 ) -> anyhow::Result<()> {
-    let store = codegen_store(root, cache, "route-tree", "generate.mjs", None);
+    // The codegen cache key includes the framework: a React tree and a Solid
+    // tree over the same routes differ (import sources, footer declaration).
+    let kind = match framework {
+        StartFramework::React => "route-tree",
+        StartFramework::Solid => "route-tree-solid",
+    };
+    let store = codegen_store(root, cache, kind, "generate.mjs", None);
     let dest = root.join("src").join("routeTree.gen.ts");
     let outputs = [("routeTree.gen.ts", dest.as_path())];
     let inputs: Vec<PathBuf> = list_route_files(root).into_iter().collect();
@@ -1675,12 +1753,17 @@ fn bundle_client_entry(
     )
 }
 
-fn start_bundle_store(root: &Path, mode: &str) -> oj_cache::start_bundle::StartBundleStore {
-    oj_cache::start_bundle::StartBundleStore::for_mode(
+fn start_bundle_store(
+    root: &Path,
+    mode: &str,
+    framework: StartFramework,
+) -> oj_cache::start_bundle::StartBundleStore {
+    oj_cache::start_bundle::StartBundleStore::for_mode_and_framework(
         root,
         env!("CARGO_PKG_VERSION"),
         oj_cache::integrity::VerifyMode::from_env(),
         mode,
+        framework.router_target(),
     )
 }
 
@@ -1689,8 +1772,9 @@ fn bundle_client_entry_cached(
     cache: &Path,
     script_env: &[(String, String)],
     mode: &str,
+    framework: StartFramework,
 ) -> anyhow::Result<oj_cache::start_bundle::PinnedBundle> {
-    let store = start_bundle_store(root, mode);
+    let store = start_bundle_store(root, mode, framework);
     match store.restore(cache) {
         Ok((stats, pinned)) => {
             let rehashed = match stats.rehashed {
@@ -1741,6 +1825,7 @@ fn script_env(
     config_file: Option<&Path>,
     command: &str,
     mode: &str,
+    framework: StartFramework,
 ) -> anyhow::Result<Vec<(String, String)>> {
     let inputs = script_inputs(env, root, config_file, command, mode)?;
     let mut vars = vec![
@@ -1757,6 +1842,24 @@ fn script_env(
             inputs.app_env.node_env().to_string(),
         ),
         ("OJ_MODE".to_string(), mode.to_string()),
+        // The Start flavor the `assets/start/*` scripts embed in package-name
+        // strings (server/client rpc, server-entry) and codegen targets.
+        (
+            "OJ_START_PKG".to_string(),
+            framework.env_value().to_string(),
+        ),
+        (
+            "OJ_ROUTER_TARGET".to_string(),
+            framework.router_target().to_string(),
+        ),
+        (
+            "OJ_CLIENT_ENTRY".to_string(),
+            framework.client_entry_file().to_string(),
+        ),
+        (
+            "OJ_SERVER_ENTRY_FILE".to_string(),
+            framework.server_entry_file().to_string(),
+        ),
     ];
     vars.extend(start_script_vars(env, &inputs)?);
     Ok(vars)
@@ -2939,7 +3042,8 @@ mod tests {
         )
         .unwrap();
         std::fs::write(root.join(".env.staging"), "VITE_X=1\nAPP_Y=2\nSECRET_Z=3\n").unwrap();
-        let vars = start_script_env(&root, None, "serve", "staging").unwrap();
+        let vars =
+            start_script_env(&root, None, "serve", "staging", StartFramework::React).unwrap();
         let get = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
         assert_eq!(get("VITE_X").as_deref(), Some("1"));
         assert_eq!(get("APP_Y").as_deref(), Some("2"));
@@ -2971,7 +3075,14 @@ mod tests {
                 r#"{ "ssr": { "runnerBacked": true, "resolve": { "conditions": ["workerd", "worker", "module", "browser", "development|production"], "externalConditions": ["workerd", "development|production"] } } }"#,
             )
             .unwrap();
-            let vars = start_script_env(&runner_backed, None, "serve", "development").unwrap();
+            let vars = start_script_env(
+                &runner_backed,
+                None,
+                "serve",
+                "development",
+                StartFramework::React,
+            )
+            .unwrap();
             let var = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
             assert_eq!(
                 var("OJ_RESOLVE_CONDITIONS").as_deref(),
@@ -2995,7 +3106,14 @@ mod tests {
                      "resolve": { "conditions": ["module", "browser", "development|production"] } }"#,
             )
             .unwrap();
-            let vars = start_script_env(&with_raw, None, "serve", "development").unwrap();
+            let vars = start_script_env(
+                &with_raw,
+                None,
+                "serve",
+                "development",
+                StartFramework::React,
+            )
+            .unwrap();
             let var = |k: &str| vars.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
             assert_eq!(
                 var("OJ_RESOLVE_CONDITIONS").as_deref(),
@@ -3014,7 +3132,14 @@ mod tests {
                 r#"{ "environments": { "ssr": { "resolve": { "conditions": ["browser", "module"] } } } }"#,
             )
             .unwrap();
-            let vars = start_script_env(&plain_browser, None, "serve", "development").unwrap();
+            let vars = start_script_env(
+                &plain_browser,
+                None,
+                "serve",
+                "development",
+                StartFramework::React,
+            )
+            .unwrap();
             let cond = vars
                 .iter()
                 .find(|(n, _)| n == "OJ_RESOLVE_CONDITIONS")
@@ -3037,7 +3162,14 @@ mod tests {
                      "resolve": { "conditions": ["module", "browser", "development|production"] } }"#,
             )
             .unwrap();
-            let vars = start_script_env(&cf_shape, None, "serve", "development").unwrap();
+            let vars = start_script_env(
+                &cf_shape,
+                None,
+                "serve",
+                "development",
+                StartFramework::React,
+            )
+            .unwrap();
             let cond = vars
                 .iter()
                 .find(|(n, _)| n == "OJ_RESOLVE_CONDITIONS")
@@ -3055,7 +3187,8 @@ mod tests {
         // Defaults: VITE_ only, and no prefix/define vars at all.
         let plain = tmp("script-env-plain");
         std::fs::write(plain.join(".env"), "VITE_X=1\nAPP_Y=2\n").unwrap();
-        let vars = start_script_env(&plain, None, "serve", "development").unwrap();
+        let vars =
+            start_script_env(&plain, None, "serve", "development", StartFramework::React).unwrap();
         let names: Vec<&str> = vars.iter().map(|(n, _)| n.as_str()).collect();
         assert!(names.contains(&"VITE_X"));
         assert!(!names.contains(&"APP_Y"));
@@ -3127,7 +3260,7 @@ mod tests {
     #[test]
     fn script_env_node_env_shell_wins_then_env_files() {
         let node_env = |env: &oj_env::Env, root: &Path, mode: &str| -> String {
-            let vars = script_env(env, root, None, "serve", mode).unwrap();
+            let vars = script_env(env, root, None, "serve", mode, StartFramework::React).unwrap();
             vars.into_iter()
                 .find(|(k, _)| k == "NODE_ENV")
                 .map(|(_, v)| v)
@@ -3174,7 +3307,8 @@ mod tests {
         let root = tmp("client-conds");
         std::fs::write(root.join("package.json"), r#"{"name":"app"}"#).unwrap();
         let conds = |command: &str| -> Vec<String> {
-            let vars = start_script_env(&root, None, command, "development").unwrap();
+            let vars = start_script_env(&root, None, command, "development", StartFramework::React)
+                .unwrap();
             let raw = &vars
                 .iter()
                 .find(|(k, _)| k == "OJ_CLIENT_CONDITIONS")

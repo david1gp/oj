@@ -7,6 +7,8 @@ import { importPkg, importOjRolldown, viteEnvDefine, environmentDefines, jsxTran
 import { assetsPlugin, makeVitePlugins, nodeBuiltinShims, workspaceRoot } from "./rolldown-assets.mjs";
 import { loadPluginContainer } from "./vite-plugin-bridge.mjs";
 import { transformGlob } from "./glob-transform.mjs";
+import { solidBundlePlugin, solidJsxOption, solidConditions } from "./solid-transform.mjs";
+import { startPkg, clientEntryFile } from "./start-pkg.mjs";
 import { pathToFileURL } from "node:url";
 
 // Runs on oj's embedded engine (`ScriptEngine`): the values that used to be
@@ -26,7 +28,9 @@ export async function run(env = null) {
 async function main() {
   const HERE = dirname(fileURLToPath(import.meta.url));
   const APP = process.env.OJ_APP_ROOT ?? process.cwd();
-  const { build } = await importOjRolldown(APP, ["vite", "@tanstack/react-start"]);
+  const { build } = await importOjRolldown(APP, ["vite", startPkg()]);
+  // Solid apps: babel-preset-solid owns JSX (dom + hydratable), rolldown keeps its hands off.
+  const solidPlugin = await solidBundlePlugin(APP, "dom");
   const WORKSPACE = workspaceRoot(APP);
   const SERVER_FN_BASE = process.env.TSS_SERVER_FN_BASE ?? "/_serverFn/";
   // Vite's `--mode` (OJ_MODE from oj; `development` for `oj dev` without one).
@@ -79,7 +83,7 @@ async function main() {
       out = out.slice(0, e.open) + `createClientRpc(${JSON.stringify(id2)})` + out.slice(e.close);
     }
     // On the first line, not above it: the rewrite must not shift source lines.
-    return `import { createClientRpc } from "@tanstack/react-start/client-rpc"; ${out}`;
+    return `import { createClientRpc } from "${startPkg()}/client-rpc"; ${out}`;
   }
 
   // The app's package.json "imports" wins over the src/router convention, the
@@ -148,10 +152,10 @@ async function main() {
   };
 
   const result = await build({
-    input: join(HERE, "client-entry.tsx"),
+    input: join(HERE, clientEntryFile()),
     platform: "browser",
     transform: {
-      jsx: jsxTransformOptions(NODE_ENV !== "production"),
+      jsx: solidJsxOption(APP, jsxTransformOptions(NODE_ENV !== "production")),
       define: {
         "process.env": JSON.stringify({ NODE_ENV, TSS_SERVER_FN_BASE: SERVER_FN_BASE }),
         // Explicit, like Vite's define plugin. It also guards a regression if
@@ -166,7 +170,7 @@ async function main() {
       },
     },
     resolve: {
-      conditionNames: CLIENT_CONDITIONS,
+      conditionNames: solidConditions(CLIENT_CONDITIONS, APP),
       alias: {
         "#tanstack-router-entry": routerEntry(),
         "#tanstack-start-entry": join(HERE, "start-entry.ts"),
@@ -176,12 +180,13 @@ async function main() {
       },
     },
     plugins: [
+      solidPlugin,
       closureRecorder,
       makeVitePlugins({ container, appRoot: APP, mode: "dev" }),
       assetsPlugin({ mode: "dev", cssUrls, root: APP }),
       serverFnClient,
       nodeBuiltinShims({ production: false }),
-    ],
+    ].filter(Boolean),
     output: {
       format: "esm",
       banner:
