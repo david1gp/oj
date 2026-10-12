@@ -7,8 +7,25 @@ name: release
 # --exclude <already-published> if cargo refuses the duplicates. Auth is
 # crates.io Trusted Publishing (OIDC): each crate lists this repo+workflow as
 # a publisher, and the auth action mints a run-scoped token — no stored
-# secret. A crate's very first publish cannot be trust-configured yet; do
-# that one manually with a scoped token, then it joins the flow.
+# secret. A crate's very first publish cannot be trust-configured yet (OIDC
+# cannot create new crates); do that one manually with a scoped token, then
+# it joins the flow via the official API:
+# POST /api/v1/trusted_publishing/github_configs with
+# {github_config:{crate, repository_owner:david1gp, repository_name:oj,
+# workflow_filename:release.yml, environment:null}} — list existing configs
+# and create the missing ones only (browser UI optional, not required).
+# The verified david1gp token already has the trusted-publishing scope.
+# Fork bootstrap (david1gp/oj, adaptive-oj lineage): the one-time crates.io
+# bootstrap for the 15 new adaptive-oj-* names is docs/adaptive-oj-release.md
+# (scoped CARGO_REGISTRY_TOKEN use, then per-crate Trusted Publishing for
+# this repo+workflow). After that this workflow publishes the fork unchanged;
+# the v* tag must match the workspace version (0.2.23).
+# Bootstrap version convention: v0.2.23 is the one-time manual-publish tag.
+# All 15 crates are already on crates.io at 0.2.23 before the tag is pushed,
+# so the publish job skips exactly that tag (re-publishing would fail as
+# duplicates) while the github release and snapshot-pin jobs still run.
+# Later versions publish via OIDC: bump the workspace version, push the
+# matching v* tag.
 on:
   push:
     tags: ["v*"]
@@ -44,6 +61,9 @@ jobs:
   publish:
     name: cargo publish
     needs: release
+    # Bootstrap skip: v0.2.23 was manually published before tagging;
+    # re-publishing would fail as duplicates. Release + snapshot-pin still run.
+    if: github.ref_name != 'v0.2.23'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
@@ -60,8 +80,14 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         # --no-verify: verifying a fork crate standalone compiles deno_v8
         # without the v8 feature that only the full workspace unifies (the
-        # same wall the manual fork publishes always hit); ci.yml on main is
-        # the build gate.
+        # same wall the manual fork publishes always hit); the gate is the
+        # targeted local preflight checks in docs/adaptive-oj-release.md
+        # (metadata/package list plus cargo check --locked -p adaptive-oj,
+        # focused relevant Rust tests, node --test
+        # e2e/unit/start-client-transforms.test.mjs — 9 Rust + 5 JS passed,
+        # CLI check plus all-15 listings — not full CI).
+        # Pushes to the fork branch intentionally do not run the full
+        # ci.yml e2e suite (its push trigger stays main-only).
         run: cargo publish --workspace --locked --no-verify
 
   # The pinned V8 snapshot bundle (issue #211): snapshot creation is

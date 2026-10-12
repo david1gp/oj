@@ -78,14 +78,16 @@ zero browser console/page errors. No version bump needed for the fork.**
 
 ## How to verify
 
-Fork install (no version bump, not a release build):
+Fork install (no version bump, not a release build). Usable today from a
+local checkout; the git form works only after this branch is pushed:
 
 ```sh
-cargo install --git https://github.com/david1gp/oj --branch solid-support oj
+cargo install --path crates/oj --locked
+cargo install --git https://github.com/david1gp/oj --branch solid-support adaptive-oj
 ```
 
 ```sh
-cargo build -p oj
+cargo build -p adaptive-oj
 # fixture deps (bun.lock only):
 (cd e2e/fixtures/solid-start-app && bun install)
 # CI equivalent (no bun on runners):
