@@ -4,8 +4,11 @@ Independent crates.io lineage for the Solid-support fork while upstream
 integration is pending. Workspace version stays `0.2.23`; this is a separate
 package lineage, not a version bump. All seven required crates are published
 at `0.2.23`. Trusted Publisher setup and verification of a registry install
-are still in progress. Do not publish crates, create tags, or push from a
-docs-only change: the steps below are run explicitly by a human.
+are complete: all seven required crates have verified Trusted Publishing
+configurations, and a genuine crates.io `adaptive-oj@0.2.23` install was
+verified to expose the `oj` executable. The matching `v0.2.23` GitHub release
+and its release workflow are also complete; do not repeat the one-time release
+actions documented below.
 
 ## Package map
 
@@ -159,9 +162,11 @@ OIDC still cannot create new crates, so the manual bootstrap above stays
 required for each new name's very first publish. After the bootstrap, the
 verified `david1gp` token already carries the trusted-publishing scope, so
 the official API can configure each of the 7 required crates — no browser UI
-required (it remains optional). Configuration of the seven required crates
-is still in progress; do not treat these setup instructions as confirmation
-that they are configured. Existing Trusted Publishing configs for the six
+required (it remains optional). Trusted Publishing is verified for all seven
+required crates (`adaptive-oj`, `adaptive-oj-cache`, `adaptive-oj-compiler`,
+`adaptive-oj-resolver`, `adaptive-oj-server`, `adaptive-oj-env`, and
+`adaptive-oj-config`) against `david1gp/oj`, workflow `release.yml`, with no
+environment. Existing Trusted Publishing configs for the six
 yanked unused `adaptive-oj-*` names are retained; do not remove them, and do
 not republish or un-yank those crates:
 
