@@ -2,8 +2,10 @@
 
 Independent crates.io lineage for the Solid-support fork while upstream
 integration is pending. Workspace version stays `0.2.23`; this is a separate
-package lineage, not a version bump. Do not publish crates, create tags, or
-push from a docs-only change: the steps below are run explicitly by a human.
+package lineage, not a version bump. All seven required crates are published
+at `0.2.23`. Trusted Publisher setup and verification of a registry install
+are still in progress. Do not publish crates, create tags, or push from a
+docs-only change: the steps below are run explicitly by a human.
 
 ## Package map
 
@@ -26,14 +28,17 @@ identities, never mixed with fork ones): `oj_graph`, `oj_js`, `oj_css`,
 `oj_diag`, `oj_deno_napi`, `oj_deno_process`, `oj_deno_runtime`, and
 `oj_deno_snapshots` (underscore names, `0.2.22`).
 
-Already-published but unused: six earlier `adaptive-oj-*` names
-(`adaptive-oj-graph`, `adaptive-oj-js`, `adaptive-oj-css`, `adaptive-oj-diag`,
-`adaptive-oj-deno-napi`, `adaptive-oj-deno-runtime`) remain on crates.io
-without yanking and keep their existing Trusted Publishing configs, but the
+Already-published but unused: six earlier `adaptive-oj-*` archives at `0.2.23`
+(`adaptive-oj-css`, `adaptive-oj-diag`, `adaptive-oj-deno-napi`,
+`adaptive-oj-deno-process`, `adaptive-oj-deno-runtime`, and
+`adaptive-oj-deno-snapshots`) were successfully yanked; registry verification
+confirmed the yanked status. Permanent deletion was unavailable without a
+crates.io website session, so their names and archives remain. Do not republish
+or accidentally un-yank them. Existing locked resolutions remain valid. The
 CLI release graph does not depend on them and release scripts never select
-them. Their publishable local members stay in the workspace with
-`publish = false`, still named `adaptive-oj-*`, so local `-p adaptive-oj-*`
-test/build selectors keep working.
+them. Their local members stay in the workspace with `publish = false`, still
+named `adaptive-oj-*`, so local `-p adaptive-oj-*` test/build selectors keep
+working.
 
 Unchanged: the installed command stays `oj` (`[[bin]]` name), Rust library
 targets and `use oj_*::` imports stay as-is, crate directory paths stay
@@ -54,23 +59,23 @@ targets and `use oj_*::` imports stay as-is, crate directory paths stay
   cargo install --git https://github.com/david1gp/oj --branch solid-support --locked adaptive-oj
   ```
 
-- From crates.io only after the first successful publication:
+- From crates.io (published `0.2.23`):
 
   ```sh
   cargo install adaptive-oj --locked
   ```
 
-## One-time bootstrap (seven required names at 0.2.23)
+## Completed one-time bootstrap — historical reference only; do not rerun
 
-Each new name's very first publish cannot use Trusted Publishing yet (OIDC
-cannot create new crates); do it
-manually with a scoped token, then every crate joins the release workflow.
-Select the seven required fork crates explicitly in one Cargo 1.95+ invocation
-with repeated `-p` flags — never `--workspace` (keep unused local members out
-of the release). Cargo packages the selected set up front using its temporary
-registry overlay, then schedules uploads in dependency order. Do not replace
-this with seven separate publish commands: repeated packaging setup wastes
-time, especially within the future OIDC token's 30-minute lifetime.
+The seven required names were successfully bootstrap-published at `0.2.23`.
+The procedure below is retained as a historical record only. Do not repeat the
+publish command or use its credential-loading instructions for this release.
+
+At bootstrap time, new names could not use Trusted Publishing (OIDC cannot
+create crates), so the seven required fork crates were published manually
+with a scoped token. The historical invocation selected them explicitly with
+repeated `-p` flags rather than `--workspace`, packaging the set up front and
+uploading in dependency order.
 
 Bootstrap version convention: publish the seven required crates manually at `0.2.23`
 first, then push tag `v0.2.23`. That tag still creates the GitHub release and
@@ -154,9 +159,11 @@ OIDC still cannot create new crates, so the manual bootstrap above stays
 required for each new name's very first publish. After the bootstrap, the
 verified `david1gp` token already carries the trusted-publishing scope, so
 the official API can configure each of the 7 required crates — no browser UI
-required (it remains optional). The six already-published unused
-`adaptive-oj-*` names keep their existing publisher configs; do not remove
-them:
+required (it remains optional). Configuration of the seven required crates
+is still in progress; do not treat these setup instructions as confirmation
+that they are configured. Existing Trusted Publishing configs for the six
+yanked unused `adaptive-oj-*` names are retained; do not remove them, and do
+not republish or un-yank those crates:
 
 ```sh
 # List existing configs first, then create only the missing crates, one call each:
