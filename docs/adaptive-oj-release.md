@@ -6,9 +6,13 @@ package lineage, not a version bump. All seven required crates are published
 at `0.2.23`. Trusted Publisher setup and verification of a registry install
 are complete: all seven required crates have verified Trusted Publishing
 configurations, and a genuine crates.io `adaptive-oj@0.2.23` install was
-verified to expose the `oj` executable. The matching `v0.2.23` GitHub release
-and its release workflow are also complete; do not repeat the one-time release
-actions documented below.
+verified to expose the `oj` executable. The annotated `v0.2.23` tag is pushed
+and its GitHub release was created from the exact changelog section. The tag
+produced no Actions run: GitHub's Actions API listed no runs/workflows although
+Actions are enabled. Thus the OIDC publish job was not run (and must not be
+rerun for already-published crates); the snapshot staleness check was evaluated
+directly and returned `stale=false`, so no harvest or PR was needed. Do not
+repeat the one-time release actions documented below.
 
 ## Package map
 
