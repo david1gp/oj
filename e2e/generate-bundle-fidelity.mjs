@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.join(here, "..");
 const oj = path.join(repo, "target", "debug", "oj");
 
-execSync("cargo build -p oj", { cwd: repo, stdio: "inherit" });
+execSync("cargo build -p adaptive-oj", { cwd: repo, stdio: "inherit" });
 
 // generateBundle must see a Rollup-shaped bundle: chunks carry facadeModuleId,
 // imports, exports and a `modules` map; a plugin can rename a chunk (mutate

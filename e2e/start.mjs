@@ -26,7 +26,7 @@ if (!installed) {
   process.exit(0);
 }
 
-execSync("cargo build -p oj", { cwd: repo, stdio: "inherit" });
+execSync("cargo build -p adaptive-oj", { cwd: repo, stdio: "inherit" });
 // Retried: SIGKILLed servers orphan node children for a beat, and their
 // NODE_COMPILE_CACHE flush into .oj-cache/v8 races the removal (ENOTEMPTY).
 const rm = (p) => {

@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.join(here, "..");
 const oj = path.join(repo, "target", "debug", "oj");
 
-execSync("cargo build -p oj", { cwd: repo, stdio: "inherit" });
+execSync("cargo build -p adaptive-oj", { cwd: repo, stdio: "inherit" });
 
 // A plugin emits an extra chunk from a real source file during transform, then
 // reads that chunk's final hashed name via getFileName() in generateBundle and

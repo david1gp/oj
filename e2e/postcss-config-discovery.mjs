@@ -33,7 +33,7 @@ if (!nodeModules) {
   process.exit(0);
 }
 
-execSync("cargo build -p oj", { cwd: repo, stdio: "inherit" });
+execSync("cargo build -p adaptive-oj", { cwd: repo, stdio: "inherit" });
 
 const ws = fs.mkdtempSync(path.join(os.tmpdir(), "oj-postcss-ws-"));
 const app = path.join(ws, "packages", "web");

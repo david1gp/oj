@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.join(here, "..");
 const oj = path.join(repo, "target", "debug", "oj");
 
-execSync("cargo build -p oj", { cwd: repo, stdio: "inherit" });
+execSync("cargo build -p adaptive-oj", { cwd: repo, stdio: "inherit" });
 
 // A plugin-served virtual module with a `.jsx` id must be parsed as JSX (not
 // plain JS). Regression for the unplugin-icons `~icons/*.jsx` case: oj used to

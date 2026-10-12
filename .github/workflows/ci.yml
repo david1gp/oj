@@ -289,7 +289,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --prefix playground
-      - run: cargo run -p oj -- build playground
+      - run: cargo run -p adaptive-oj -- build playground
       - name: reject unresolved build imports
         run: node e2e/build-unresolved.mjs
       - name: check outputs
@@ -374,7 +374,7 @@ jobs:
           mkdir -p /tmp/lib/src
           printf 'export const add = (a, b) => a + b;\n' > /tmp/lib/src/index.ts
           printf 'import { defineConfig } from "oj";\nexport default defineConfig({ build: { lib: { entry: "src/index.ts", name: "L", formats: ["es", "cjs", "umd"] } } });\n' > /tmp/lib/oj.config.ts
-          cargo run -p oj -- build /tmp/lib
+          cargo run -p adaptive-oj -- build /tmp/lib
           # Vite's lib file names for a package without "type": "module"
           test -f /tmp/lib/dist/index.mjs
           test -f /tmp/lib/dist/index.js
@@ -387,7 +387,7 @@ jobs:
         run: node e2e/ssr-dev.mjs
       - name: preview smoke
         run: |
-          (cargo run -p oj -- preview playground &)
+          (cargo run -p adaptive-oj -- preview playground &)
           for i in $(seq 1 30); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 1; done
           curl -sf http://localhost:4173/ | grep -q 'id="root"'
           test "$(curl -sf -o /dev/null -w '%{http_code}' http://localhost:4173/deep/route)" = 200

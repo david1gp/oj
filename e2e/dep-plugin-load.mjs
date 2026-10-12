@@ -22,7 +22,7 @@ const oj = path.join(repo, "target", "debug", "oj");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PORT = 5530;
 
-execSync("cargo build -p oj", { cwd: repo, stdio: "inherit" });
+execSync("cargo build -p adaptive-oj", { cwd: repo, stdio: "inherit" });
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "oj-dep-load-"));
 const app = path.join(tmp, "app");
