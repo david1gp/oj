@@ -14,6 +14,20 @@ rerun for already-published crates); the snapshot staleness check was evaluated
 directly and returned `stale=false`, so no harvest or PR was needed. Do not
 repeat the one-time release actions documented below.
 
+### Remaining future-automation prerequisite
+
+At `2026-10-12T12:51:37Z`, the fork's repository Actions policy was already
+`enabled=true`/`allowed_actions=all`, but workflows and runs were both empty
+and `release.yml` returned HTTP 404. Future tag automation is not yet verified.
+GitHub's [documented fork activation](https://docs.github.com/en/code-security/code-scanning/enabling-code-scanning/configuring-default-setup-for-code-scanning)
+uses the authenticated Actions-tab acknowledgement, which enables **all**
+existing workflows. Review and keep `nightly.yml` disabled unless explicitly
+wanted: it schedules expensive fuzz/ignored-test jobs daily at 03:00 UTC.
+The documented REST/CLI workflow-enable operation targets an existing workflow;
+no supported release-only registration route was established for this empty
+workflow list. No Actions settings were changed. Resolve fork activation before
+a genuinely new release; never move or recreate `v0.2.23` to test it.
+
 ## Package map
 
 Final release set: seven fork packages at `0.2.23` — CLI, cache, compiler,
