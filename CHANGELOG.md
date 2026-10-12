@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Adaptive oj fork
 
-- Independent Solid-support fork published as the `adaptive-oj` Cargo package, with the `oj` executable and matching `adaptive-oj-*` internal crates. Supports npm-based Vite/Solid projects, including Solid Start. After publication, install with `cargo install adaptive-oj --locked`.
+- Independent Solid-support fork published as the `adaptive-oj` Cargo package, with the `oj` executable, seven `adaptive-oj-*` fork crates (cache, compiler, config, env, resolver, server) and eight reused upstream `oj_*` 0.2.22 dependencies. Supports npm-based Vite/Solid projects, including Solid Start. After publication, install with `cargo install adaptive-oj --locked`.
 
 ## [0.2.22] - 2026-10-09
 
