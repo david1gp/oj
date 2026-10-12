@@ -11,6 +11,36 @@ import { solidBundlePlugin, solidJsxOption, solidConditions } from "./solid-tran
 import { startPkg, clientEntryFile } from "./start-pkg.mjs";
 import { pathToFileURL } from "node:url";
 
+function clientTransformPlugin(container, rewriteServerFns) {
+  return {
+    name: "server-fn-client",
+    transform: {
+      filter: {
+        id: {
+          include: /\.(tsx?|jsx?|mjs)(\?|$)/,
+          exclude: [/\/node_modules\//, /^\0/],
+        },
+      },
+      async handler(code, id) {
+        if (id.includes("/node_modules/") || id.startsWith("\0") || !/\.(tsx?|jsx?|mjs)(\?|$)/.test(id)) return null;
+        let out = code;
+        if (container) {
+          const t = await container.transformUserCode(out, id);
+          if (t != null) out = t;
+        }
+        // Plugin identity retains the query; filesystem and RPC identity do not.
+        const cleanId = id.split("?")[0];
+        out = transformGlob(out, cleanId);
+        const rpc = rewriteServerFns(out, cleanId);
+        if (rpc != null) return rpc;
+        return out === code ? null : out;
+      },
+    },
+  };
+}
+
+export const __test = { clientTransformPlugin };
+
 // Runs on oj's embedded engine (`ScriptEngine`): the values that used to be
 // spawn env arrive as `env`; `node <script>` still works for tests.
 export async function run(env = null) {
@@ -110,7 +140,12 @@ async function main() {
     return resolve(APP, "src/router.tsx");
   }
 
-  const container = await loadPluginContainer(APP, { command: "serve", mode: MODE, environment: "client" });
+  const container = await loadPluginContainer(APP, {
+    command: "serve",
+    mode: MODE,
+    environment: "client",
+    routerTransforms: Boolean(solidPlugin),
+  });
 
   const cssUrls = [];
 
@@ -132,24 +167,7 @@ async function main() {
     },
   };
 
-  const serverFnClient = {
-    name: "server-fn-client",
-    transform: {
-      filter: { id: { include: /\.(tsx?|jsx?|mjs)$/, exclude: [/\/node_modules\//, /^\0/] } },
-      async handler(code, id) {
-        if (id.includes("/node_modules/") || id.startsWith("\0") || !/\.(tsx?|jsx?|mjs)$/.test(id)) return null;
-        let out = code;
-        if (container) {
-          const t = await container.transformUserCode(out, id);
-          if (t != null) out = t;
-        }
-        out = transformGlob(out, id);
-        const rpc = rewriteServerFns(out, id);
-        if (rpc != null) return rpc;
-        return out === code ? null : out;
-      },
-    },
-  };
+  const serverFnClient = clientTransformPlugin(container, rewriteServerFns);
 
   const result = await build({
     input: join(HERE, clientEntryFile()),
@@ -180,15 +198,20 @@ async function main() {
       },
     },
     plugins: [
-      solidPlugin,
       closureRecorder,
       makeVitePlugins({ container, appRoot: APP, mode: "dev" }),
       assetsPlugin({ mode: "dev", cssUrls, root: APP }),
       serverFnClient,
+      // Router reference/split/shared transforms must see JSX, before Babel;
+      // their lazy component wrapper also determines Solid hydration levels.
+      solidPlugin,
       nodeBuiltinShims({ production: false }),
     ].filter(Boolean),
     output: {
       format: "esm",
+      // HTML serves this entry at this exact URL. Split chunks can import
+      // shared runtime exports from it; a second filename executes it twice.
+      entryFileNames: "client-entry.js",
       banner:
         `globalThis.process=globalThis.process||{env:{NODE_ENV:${JSON.stringify(NODE_ENV)},TSS_SERVER_FN_BASE:${JSON.stringify(SERVER_FN_BASE)}}};` +
         "globalThis.global=globalThis.global||globalThis;",

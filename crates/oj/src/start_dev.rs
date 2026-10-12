@@ -1765,6 +1765,46 @@ fn start_bundle_store(
         mode,
         framework.router_target(),
     )
+    .with_build_scripts(&[
+        // Keep the builder's embedded dependency closure here, not files from
+        // the app cache: restore runs before the builder on a cache hit.
+        (
+            "bundle-client.mjs",
+            include_str!("../../oj_server/src/assets/start/bundle-client.mjs"),
+        ),
+        (
+            "resolve-pkg.mjs",
+            include_str!("../../oj_server/src/assets/start/resolve-pkg.mjs"),
+        ),
+        (
+            "rolldown-assets.mjs",
+            include_str!("../../oj_server/src/assets/start/rolldown-assets.mjs"),
+        ),
+        (
+            "vite-plugin-bridge.mjs",
+            include_str!("../../oj_server/src/assets/start/vite-plugin-bridge.mjs"),
+        ),
+        (
+            "glob-transform.mjs",
+            include_str!("../../oj_server/src/assets/start/glob-transform.mjs"),
+        ),
+        (
+            "solid-transform.mjs",
+            include_str!("../../oj_server/src/assets/start/solid-transform.mjs"),
+        ),
+        (
+            "start-pkg.mjs",
+            include_str!("../../oj_server/src/assets/start/start-pkg.mjs"),
+        ),
+        (
+            "client-entry.tsx",
+            include_str!("../../oj_server/src/assets/start/client-entry.tsx"),
+        ),
+        (
+            "client-entry-solid.tsx",
+            include_str!("../../oj_server/src/assets/start/client-entry-solid.tsx"),
+        ),
+    ])
 }
 
 fn bundle_client_entry_cached(
@@ -2398,6 +2438,23 @@ fn engine_response(resp: StartResponse) -> Response {
     out
 }
 
+fn engine_error_response(error: &str) -> Response {
+    let esc = |s: &str| {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+    };
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        format!(
+            "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\" /><title>Error</title></head>\n<body><h1>Internal Server Error</h1><pre>{}</pre></body></html>\n",
+            esc(error)
+        ),
+    )
+        .into_response()
+}
+
 async fn forward(
     engine: &StartEngine,
     method: String,
@@ -2410,24 +2467,9 @@ async fn forward(
         .await
     {
         Ok(resp) => inject_reload_client(engine_response(resp)),
-        Err(e) => {
-            // The runner's 500 page shape (Vite's errorMiddleware): message +
-            // stack in an HTML page the overlay can read.
-            let esc = |s: &str| {
-                s.replace('&', "&amp;")
-                    .replace('<', "&lt;")
-                    .replace('>', "&gt;")
-            };
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                format!(
-                    "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\" /><title>Error</title></head>\n<body><h1>Internal Server Error</h1><pre>{}</pre></body></html>\n",
-                    esc(&e)
-                ),
-            )
-                .into_response()
-        }
+        // The runner's 500 page shape (Vite's errorMiddleware): message +
+        // stack in an HTML page the overlay can read.
+        Err(e) => engine_error_response(&e),
     }
 }
 
@@ -2618,6 +2660,50 @@ mod tests {
     use super::*;
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::{connect_async, tungstenite::Message as ClientMessage};
+
+    #[tokio::test]
+    async fn uncaught_start_handler_error_returns_escaped_html_500() {
+        let response = engine_error_response("route <broken> & failed");
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            response.headers()[header::CONTENT_TYPE],
+            "text/html; charset=utf-8"
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.contains("Internal Server Error"));
+        assert!(body.contains("route &lt;broken&gt; &amp; failed"));
+        assert!(!body.contains("route <broken> & failed"));
+    }
+
+    #[tokio::test]
+    async fn handled_start_framework_response_preserves_status_and_stream_body() {
+        let response = engine_response(StartResponse {
+            status: 200,
+            headers: vec![(
+                "content-type".to_owned(),
+                "multipart/mixed; boundary=solid-start-boundary".to_owned(),
+            )],
+            set_cookies: Vec::new(),
+            body: b"--solid-start-boundary\r\nroute content\r\n--solid-start-boundary--\r\n"
+                .to_vec(),
+        });
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()[header::CONTENT_TYPE],
+            "multipart/mixed; boundary=solid-start-boundary"
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(body.starts_with(b"--solid-start-boundary\r\n"));
+        assert!(body
+            .windows(b"route content".len())
+            .any(|w| w == b"route content"));
+        assert!(body.ends_with(b"--solid-start-boundary--\r\n"));
+    }
 
     struct HmrTestServer {
         url: String,
