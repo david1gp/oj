@@ -9,11 +9,7 @@ dependencies = [
  "adaptive-oj-cache",
  "adaptive-oj-compiler",
  "adaptive-oj-config",
- "adaptive-oj-css",
- "adaptive-oj-deno-napi",
- "adaptive-oj-diag",
  "adaptive-oj-env",
- "adaptive-oj-js",
  "adaptive-oj-resolver",
  "adaptive-oj-server",
  "anyhow",
@@ -27,6 +23,12 @@ dependencies = [
  "futures-util",
  "libc",
  "notify",
+ "oj_css",
+ "oj_deno_napi",
+ "oj_deno_runtime",
+ "oj_deno_snapshots",
+ "oj_diag",
+ "oj_js",
  "regex",
  "rolldown",
  "rolldown-ariadne",
@@ -185,8 +187,6 @@ dependencies = [
 name = "adaptive-oj-deno-runtime"
 version = "0.2.23"
 dependencies = [
- "adaptive-oj-deno-napi",
- "adaptive-oj-deno-process",
  "async-trait",
  "base64 0.22.1",
  "boxed_error",
@@ -237,6 +237,8 @@ dependencies = [
  "nix 0.30.1",
  "node_resolver",
  "notify",
+ "oj_deno_napi",
+ "oj_deno_process",
  "once_cell",
  "qbsdiff",
  "raw-window-handle",
@@ -291,9 +293,6 @@ dependencies = [
 name = "adaptive-oj-js"
 version = "0.2.23"
 dependencies = [
- "adaptive-oj-deno-napi",
- "adaptive-oj-deno-runtime",
- "adaptive-oj-deno-snapshots",
  "deno_config",
  "deno_core",
  "deno_error",
@@ -301,6 +300,9 @@ dependencies = [
  "deno_path_util",
  "deno_resolver",
  "node_resolver",
+ "oj_deno_napi",
+ "oj_deno_runtime",
+ "oj_deno_snapshots",
  "serde_json",
  "sys_traits",
  "tempfile",
@@ -325,12 +327,7 @@ dependencies = [
  "adaptive-oj-cache",
  "adaptive-oj-compiler",
  "adaptive-oj-config",
- "adaptive-oj-css",
- "adaptive-oj-deno-process",
- "adaptive-oj-diag",
  "adaptive-oj-env",
- "adaptive-oj-graph",
- "adaptive-oj-js",
  "adaptive-oj-resolver",
  "anyhow",
  "axum",
@@ -341,6 +338,11 @@ dependencies = [
  "json-strip-comments",
  "libc",
  "notify",
+ "oj_css",
+ "oj_deno_process",
+ "oj_diag",
+ "oj_graph",
+ "oj_js",
  "oxc_sourcemap",
  "regex",
  "reqwest",
@@ -6354,14 +6356,201 @@ dependencies = [
 ]
 
 [[package]]
+name = "oj_css"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74c23cf897b82d45ed42f6267369449c63d12d3fff27894c84c0d1e3727ed033"
+dependencies = [
+ "base64 0.22.1",
+ "grass",
+ "lightningcss",
+ "parcel_sourcemap",
+ "regex",
+ "serde_json",
+]
+
+[[package]]
+name = "oj_deno_napi"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b3ce6839323a6f52b3aa41d3da7ea6f888ba79c2815bec3b77854d83e75d6f0"
+dependencies = [
+ "deno_core",
+ "deno_error",
+ "deno_node",
+ "deno_permissions",
+ "denort_helper",
+ "libc",
+ "libloading 0.7.4",
+ "libuv-sys-lite",
+ "log",
+ "napi_sym",
+ "object 0.36.3",
+ "thiserror 2.0.20",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "oj_deno_process"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10d0dfce300319f8b297500746ce9f31dfecd7157ae08e2e99a3009677528620"
+dependencies = [
+ "deno_core",
+ "deno_error",
+ "deno_fs",
+ "deno_io",
+ "deno_os",
+ "deno_path_util",
+ "deno_permissions",
+ "deno_process",
+ "deno_signals",
+ "deno_subprocess_windows",
+ "libc",
+ "log",
+ "memchr",
+ "nix 0.30.1",
+ "rand 0.8.5",
+ "serde",
+ "sys_traits",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "oj_deno_runtime"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac3b7022f9dcc4dc7d280a900f2484ef305fbd8e6844a963a6c5d7a4fa1fac81"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "boxed_error",
+ "color-print",
+ "deno_bundle_runtime",
+ "deno_cache",
+ "deno_canvas",
+ "deno_core",
+ "deno_cron",
+ "deno_crypto",
+ "deno_error",
+ "deno_features",
+ "deno_fetch",
+ "deno_ffi",
+ "deno_fs",
+ "deno_http",
+ "deno_image",
+ "deno_inspector_server",
+ "deno_io",
+ "deno_kv",
+ "deno_net",
+ "deno_node",
+ "deno_node_crypto",
+ "deno_node_sqlite",
+ "deno_os",
+ "deno_path_util",
+ "deno_permissions",
+ "deno_resolver",
+ "deno_signals",
+ "deno_telemetry",
+ "deno_terminal",
+ "deno_tls",
+ "deno_web",
+ "deno_webgpu",
+ "deno_webidl",
+ "deno_websocket",
+ "deno_webstorage",
+ "ed25519-dalek",
+ "encoding_rs",
+ "faster-hex",
+ "fastwebsockets",
+ "http",
+ "http-body-util",
+ "hyper",
+ "libc",
+ "log",
+ "nix 0.30.1",
+ "node_resolver",
+ "notify",
+ "oj_deno_napi",
+ "oj_deno_process",
+ "once_cell",
+ "qbsdiff",
+ "raw-window-handle",
+ "regex",
+ "rustyline",
+ "same-file",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "sys_traits",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-metrics",
+ "twox-hash",
+ "unicode-normalization",
+ "uuid",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "oj_deno_snapshots"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "421b790f576c37ea5ac3b7996c031fce7bd71e1ee3c77a1c227c1fae45634bee"
+dependencies = [
+ "deno_runtime",
+]
+
+[[package]]
+name = "oj_diag"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "111205981df500cfe8b57fc34d350904000b7d2ef9eb63348226e90072eb8708"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "oj_graph"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3dfbd38fc190f3037b90c79aef57ce94a88d1d865b381402ce8d812a451adb6"
+
+[[package]]
+name = "oj_js"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "972f33065eeea90d2e3c9a7ff33c58b330863835473e717bbd3636d41642a99c"
+dependencies = [
+ "deno_config",
+ "deno_core",
+ "deno_error",
+ "deno_media_type",
+ "deno_path_util",
+ "deno_resolver",
+ "node_resolver",
+ "oj_deno_napi",
+ "oj_deno_runtime",
+ "oj_deno_snapshots",
+ "serde_json",
+ "sys_traits",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "oj_wasm"
 version = "0.2.23"
 dependencies = [
  "adaptive-oj-compiler",
- "adaptive-oj-css",
  "adaptive-oj-resolver",
  "getrandom 0.2.17",
  "getrandom 0.3.4",
+ "oj_css",
  "regex",
  "serde",
  "serde_json",

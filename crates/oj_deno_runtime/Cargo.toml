@@ -10,6 +10,7 @@
 [package]
 edition = "2024"
 name = "adaptive-oj-deno-runtime"
+publish = false
 version.workspace = true
 authors = ["the Deno authors"]
 build = false
@@ -116,12 +117,11 @@ version = "0.167.0"
 
 # The one fork change: deno_napi resolves to oj_deno_napi (upstream 0.190.0 +
 # finalizer-registry patch). The dependency KEY stays `deno_napi`, so every
-# `use deno_napi::...` in the unchanged sources keeps resolving. The path is
-# stripped on publish; a published copy resolves by version from crates.io.
+# `use deno_napi::...` in the unchanged sources keeps resolving. Use the same
+# registry identity as oj_js so local checks share its NAPI exports and hooks.
 [dependencies.deno_napi]
-package = "adaptive-oj-deno-napi"
-version = "0.2.23"
-path = "../oj_deno_napi"
+package = "oj_deno_napi"
+version = "=0.2.22"
 
 [dependencies.deno_net]
 version = "0.251.0"
@@ -145,9 +145,8 @@ version = "=0.6.4"
 version = "0.118.0"
 
 [dependencies.deno_process]
-package = "adaptive-oj-deno-process"
-version = "0.2.23"
-path = "../oj_deno_process"
+package = "oj_deno_process"
+version = "=0.2.22"
 
 [dependencies.deno_resolver]
 version = "0.90.0"

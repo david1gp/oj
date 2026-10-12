@@ -28,14 +28,14 @@ repository = "https://github.com/david1gp/oj"
 [workspace.dependencies]
 oj_compiler = { package = "adaptive-oj-compiler", version = "0.2.23", path = "crates/oj_compiler" }
 oj_resolver = { package = "adaptive-oj-resolver", version = "0.2.23", path = "crates/oj_resolver" }
-oj_graph = { package = "adaptive-oj-graph", version = "0.2.23", path = "crates/oj_graph" }
+oj_graph = "=0.2.22"
 oj_cache = { package = "adaptive-oj-cache", version = "0.2.23", path = "crates/oj_cache" }
-oj_css = { package = "adaptive-oj-css", version = "0.2.23", path = "crates/oj_css" }
-oj_diag = { package = "adaptive-oj-diag", version = "0.2.23", path = "crates/oj_diag" }
+oj_css = "=0.2.22"
+oj_diag = "=0.2.22"
 oj_env = { package = "adaptive-oj-env", version = "0.2.23", path = "crates/oj_env" }
 oj_config = { package = "adaptive-oj-config", version = "0.2.23", path = "crates/oj_config" }
 oj_server = { package = "adaptive-oj-server", version = "0.2.23", path = "crates/oj_server" }
-oj_js = { package = "adaptive-oj-js", version = "0.2.23", path = "crates/oj_js" }
+oj_js = "=0.2.22"
 
 # oj-maintained forks of deno_napi 0.190.0 and deno_runtime 0.267.0 (published
 # to crates.io under these names), carrying oj's napi finalizer-registry patch:
@@ -44,9 +44,12 @@ oj_js = { package = "adaptive-oj-js", version = "0.2.23", path = "crates/oj_js" 
 # hundreds of thousands of live references — it dominated one-shot rebundle
 # children. See crates/oj_deno_napi/lib.rs. Consumers rename them back via the
 # dependency key so `use deno_napi::`/`use deno_runtime::` stay unchanged; a
-# published oj resolves them by version from crates.io.
-oj_deno_napi = { package = "adaptive-oj-deno-napi", version = "0.2.23", path = "crates/oj_deno_napi" }
-oj_deno_runtime = { package = "adaptive-oj-deno-runtime", version = "0.2.23", path = "crates/oj_deno_runtime" }
+# published oj resolves them by version from crates.io. Keep the verified
+# upstream 0.2.22 dependency train together; the local copies are nonpublishable.
+oj_deno_napi = "=0.2.22"
+oj_deno_process = "=0.2.22"
+oj_deno_runtime = "=0.2.22"
+oj_deno_snapshots = "=0.2.22"
 
 oxc_allocator = "0.146.0"
 oxc_parser = "0.146.0"
@@ -97,14 +100,18 @@ codegen-units = 1
 adaptive-oj = { opt-level = 3 }
 adaptive-oj-compiler = { opt-level = 3 }
 adaptive-oj-css = { opt-level = 3 }
+oj_css = { opt-level = 3 }
 adaptive-oj-resolver = { opt-level = 3 }
 adaptive-oj-graph = { opt-level = 3 }
+oj_graph = { opt-level = 3 }
 adaptive-oj-server = { opt-level = 3 }
 adaptive-oj-cache = { opt-level = 3 }
 adaptive-oj-diag = { opt-level = 3 }
+oj_diag = { opt-level = 3 }
 adaptive-oj-env = { opt-level = 3 }
 adaptive-oj-config = { opt-level = 3 }
 adaptive-oj-js = { opt-level = 3 }
+oj_js = { opt-level = 3 }
 oxc = { opt-level = 3 }
 oxc_allocator = { opt-level = 3 }
 oxc_ast = { opt-level = 3 }
@@ -165,8 +172,10 @@ v8 = { opt-level = 3 }
 # deno_fs/deno_io: the one-shot rebundle child funnels every napi call, sync
 # fs op and chunk write through these.
 adaptive-oj-deno-napi = { opt-level = 3 }
+oj_deno_napi = { opt-level = 3 }
 deno_node = { opt-level = 3 }
 adaptive-oj-deno-runtime = { opt-level = 3 }
+oj_deno_runtime = { opt-level = 3 }
 # Vanilla deno_runtime stays in the graph as deno_snapshots' build-dependency.
 deno_runtime = { opt-level = 3 }
 deno_web = { opt-level = 3 }
