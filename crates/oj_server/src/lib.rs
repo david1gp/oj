@@ -169,6 +169,48 @@ const START_ASSETS: &[(&str, &str)] = &[
     ),
 ];
 
+const START_BUILD_SCRIPTS: &[(&str, &str)] = &[
+    (
+        "bundle-client.mjs",
+        include_str!("assets/start/bundle-client.mjs"),
+    ),
+    (
+        "resolve-pkg.mjs",
+        include_str!("assets/start/resolve-pkg.mjs"),
+    ),
+    (
+        "rolldown-assets.mjs",
+        include_str!("assets/start/rolldown-assets.mjs"),
+    ),
+    (
+        "vite-plugin-bridge.mjs",
+        include_str!("assets/start/vite-plugin-bridge.mjs"),
+    ),
+    (
+        "glob-transform.mjs",
+        include_str!("assets/start/glob-transform.mjs"),
+    ),
+    (
+        "solid-transform.mjs",
+        include_str!("assets/start/solid-transform.mjs"),
+    ),
+    ("start-pkg.mjs", include_str!("assets/start/start-pkg.mjs")),
+    (
+        "client-entry.tsx",
+        include_str!("assets/start/client-entry.tsx"),
+    ),
+    (
+        "client-entry-solid.tsx",
+        include_str!("assets/start/client-entry-solid.tsx"),
+    ),
+];
+
+/// Embedded scripts required to build the TanStack Start client bundle.
+/// Kept in the order expected by the bundle cache's script store.
+pub fn start_build_scripts() -> &'static [(&'static str, &'static str)] {
+    START_BUILD_SCRIPTS
+}
+
 /// Persistent V8 code-cache dir for embedded engines, keyed by the V8 ABI and
 /// NOT the oj version: per-entry source hashes already invalidate changed scripts.
 pub fn engine_code_cache_dir(root: &Path) -> PathBuf {

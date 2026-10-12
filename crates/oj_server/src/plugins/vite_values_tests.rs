@@ -658,12 +658,14 @@ async fn boot_host_stall_monitor_flips_evidence_without_a_call_and_init_clears_i
         Err(e) => panic!("the embedded engine spawns: {e}"),
     };
     let mut evidence = host.init_failure_updates();
-    assert!(tokio::time::timeout(
-        std::time::Duration::from_secs(20),
-        evidence.wait_for(|v| *v),
-    )
-    .await
-    .is_ok_and(|r| r.is_ok()));
+    assert!(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            evidence.wait_for(|v| *v),
+        )
+        .await
+        .is_ok_and(|r| r.is_ok())
+    );
     // Init progressing clears the evidence (a milestone or init itself).
     assert!(
         tokio::time::timeout(
@@ -1357,9 +1359,11 @@ fn parse_reads_build_block() {
     assert_eq!(b["outDir"], "out");
     assert_eq!(b["sourcemap"], true);
     assert_eq!(b["ssr"], "src/entry-server.ts");
-    assert!(parse_vite_values(&serde_json::json!({ "build": null }))
-        .build
-        .is_none());
+    assert!(
+        parse_vite_values(&serde_json::json!({ "build": null }))
+            .build
+            .is_none()
+    );
 }
 
 #[test]

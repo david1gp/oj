@@ -1584,10 +1584,12 @@ mod tests {
             r#"{"hash":"abc","metadata":{}}"#,
         )
         .unwrap();
-        assert!(load_manifest(&deps, "abc")
-            .expect("empty is valid")
-            .map
-            .is_empty());
+        assert!(
+            load_manifest(&deps, "abc")
+                .expect("empty is valid")
+                .map
+                .is_empty()
+        );
     }
 
     fn test_deps(discovery: bool, exclude: Vec<String>) -> OptimizedDeps {

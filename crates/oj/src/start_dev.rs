@@ -1765,46 +1765,9 @@ fn start_bundle_store(
         mode,
         framework.router_target(),
     )
-    .with_build_scripts(&[
-        // Keep the builder's embedded dependency closure here, not files from
-        // the app cache: restore runs before the builder on a cache hit.
-        (
-            "bundle-client.mjs",
-            include_str!("../../oj_server/src/assets/start/bundle-client.mjs"),
-        ),
-        (
-            "resolve-pkg.mjs",
-            include_str!("../../oj_server/src/assets/start/resolve-pkg.mjs"),
-        ),
-        (
-            "rolldown-assets.mjs",
-            include_str!("../../oj_server/src/assets/start/rolldown-assets.mjs"),
-        ),
-        (
-            "vite-plugin-bridge.mjs",
-            include_str!("../../oj_server/src/assets/start/vite-plugin-bridge.mjs"),
-        ),
-        (
-            "glob-transform.mjs",
-            include_str!("../../oj_server/src/assets/start/glob-transform.mjs"),
-        ),
-        (
-            "solid-transform.mjs",
-            include_str!("../../oj_server/src/assets/start/solid-transform.mjs"),
-        ),
-        (
-            "start-pkg.mjs",
-            include_str!("../../oj_server/src/assets/start/start-pkg.mjs"),
-        ),
-        (
-            "client-entry.tsx",
-            include_str!("../../oj_server/src/assets/start/client-entry.tsx"),
-        ),
-        (
-            "client-entry-solid.tsx",
-            include_str!("../../oj_server/src/assets/start/client-entry-solid.tsx"),
-        ),
-    ])
+    // Keep the builder's embedded dependency closure out of the app cache:
+    // restore runs before the builder on a cache hit.
+    .with_build_scripts(oj_server::start_build_scripts())
 }
 
 fn bundle_client_entry_cached(

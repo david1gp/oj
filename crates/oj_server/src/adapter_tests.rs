@@ -24,6 +24,34 @@ fn write_start_assets_writes_every_module_the_start_host_aliases() {
 }
 
 #[test]
+fn start_build_scripts_match_the_embedded_assets_in_cache_order() {
+    let expected_names = [
+        "bundle-client.mjs",
+        "resolve-pkg.mjs",
+        "rolldown-assets.mjs",
+        "vite-plugin-bridge.mjs",
+        "glob-transform.mjs",
+        "solid-transform.mjs",
+        "start-pkg.mjs",
+        "client-entry.tsx",
+        "client-entry-solid.tsx",
+    ];
+    let scripts = start_build_scripts();
+
+    assert_eq!(
+        scripts.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+        expected_names
+    );
+    for (name, content) in scripts {
+        let embedded = START_ASSETS
+            .iter()
+            .find(|(asset_name, _)| asset_name == name)
+            .unwrap_or_else(|| panic!("{name} is not included in START_ASSETS"));
+        assert_eq!(content, &embedded.1, "content mismatch for {name}");
+    }
+}
+
+#[test]
 fn is_tanstack_start_app_requires_routes_and_dep() {
     let base = tmp("ts");
     let app = base.join("app");

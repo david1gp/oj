@@ -1690,11 +1690,7 @@ impl PluginHost {
 }
 
 fn bool_arg(b: bool) -> &'static str {
-    if b {
-        "true"
-    } else {
-        "false"
-    }
+    if b { "true" } else { "false" }
 }
 
 /// The `emittedChunks` of a transform or buildStart reply.

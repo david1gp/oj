@@ -31,7 +31,10 @@ pub(crate) async fn asset_module(file: &Path, url: &str, kind: &str) -> Result<S
             // as text; `?direct` is the plain-CSS request, as in Vite.
             let ext = file.extension().and_then(|e| e.to_str()).unwrap_or("");
             if is_style_ext(ext) {
-                return Ok(format!("export default {:?};\n", format!("{clean_url}?direct")));
+                return Ok(format!(
+                    "export default {:?};\n",
+                    format!("{clean_url}?direct")
+                ));
             }
             Ok(format!("export default {clean_url:?};\n"))
         }
@@ -39,18 +42,30 @@ pub(crate) async fn asset_module(file: &Path, url: &str, kind: &str) -> Result<S
             let text = tokio::fs::read_to_string(file)
                 .await
                 .map_err(|e| format!("read {}: {e}", file.display()))?;
-            Ok(format!("export default {};\n", serde_json::Value::String(text)))
+            Ok(format!(
+                "export default {};\n",
+                serde_json::Value::String(text)
+            ))
         }
         "inline" => {
             // A stylesheet's `?inline` goes through `inline_css_module` instead.
             let ext = file.extension().and_then(|e| e.to_str()).unwrap_or("");
-            let bytes = tokio::fs::read(file).await.map_err(|e| format!("read: {e}"))?;
-            let mime = content_type(ext).split(';').next().unwrap_or("application/octet-stream");
+            let bytes = tokio::fs::read(file)
+                .await
+                .map_err(|e| format!("read: {e}"))?;
+            let mime = content_type(ext)
+                .split(';')
+                .next()
+                .unwrap_or("application/octet-stream");
             let data_uri = format!("data:{mime};base64,{}", base64_encode(&bytes));
             Ok(format!("export default {data_uri:?};\n"))
         }
         "worker" | "sharedworker" => {
-            let ctor = if kind == "sharedworker" { "SharedWorker" } else { "Worker" };
+            let ctor = if kind == "sharedworker" {
+                "SharedWorker"
+            } else {
+                "Worker"
+            };
             Ok(format!(
                 "export default function () {{ return new {ctor}({clean_url:?}, {{ type: \"module\" }}); }}\n"
             ))

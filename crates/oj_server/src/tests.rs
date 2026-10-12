@@ -929,10 +929,12 @@ fn error_frame_is_a_vite_error_payload() {
     assert_eq!(f["err"]["id"], "src/App.tsx");
     assert_eq!(f["err"]["loc"]["line"], 3);
     assert_eq!(f["err"]["loc"]["column"], 7);
-    assert!(f["err"]["frame"]
-        .as_str()
-        .unwrap()
-        .contains("Unexpected token"));
+    assert!(
+        f["err"]["frame"]
+            .as_str()
+            .unwrap()
+            .contains("Unexpected token")
+    );
     let plain: serde_json::Value = serde_json::from_str(&error_frame("boom")).unwrap();
     assert!(plain["err"]["id"].is_null() && plain["err"]["frame"].is_null());
     let u = update_entry("css-update", "/a.css", 5);
