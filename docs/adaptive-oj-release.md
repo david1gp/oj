@@ -89,12 +89,14 @@ try:
         if m:
             vals.append(next(g for g in m.groups() if g is not None))
     if len(vals) != 1 or not vals[0]:
-        raise ValueError("missing token")
-    subprocess.run([cargo, "publish", "--workspace", "--locked", "--no-verify"],
-                   env={**os.environ, "CARGO_REGISTRY_TOKEN": vals[0]}, check=True)
+        raise ValueError("invalid token configuration")
+    token = vals[0]
 except Exception:
-    print("CARGO_REGISTRY_TOKEN is not set", file=sys.stderr)
+    print("Unable to load CARGO_REGISTRY_TOKEN", file=sys.stderr)
     sys.exit(1)
+env = {**os.environ, "CARGO_REGISTRY_TOKEN": token}
+env["PATH"] = os.path.dirname(os.path.realpath(cargo)) + os.pathsep + env.get("PATH", "")
+sys.exit(subprocess.call([cargo, "publish", "--workspace", "--locked", "--no-verify"], env=env))
 EOF
 ```
 
